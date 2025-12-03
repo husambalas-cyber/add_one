@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>لعبة +1 لكل خانة</title>
+    <style>
+body {
+    /* Modern Gradient Background */
+    font-family: 'Arial', sans-serif;
+    margin: 0;
+    padding: 0;
+    background: linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh; /* Ensures full screen height on mobile */
+    padding: 20px;
+    box-sizing: border-box;
+}
+#gameContainer {
+    background: white;
+    padding: 30px;
+    border-radius: 20px; 
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+    width: 380px;
+    max-width: 95%; /* Highly responsive on small screens */
+    text-align: center;
+    box-sizing: border-box;
+}
+button {
+    padding: 12px 25px; 
+    font-size: 18px;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    margin: 5px;
+    transition: all 0.2s ease-in-out; 
+    font-weight: bold;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+button:hover {
+    opacity: 0.9;
+    transform: translateY(-2px); 
+    box-shadow: 0 6px 10px rgba(0, 0, 0, 0.15);
+}
+#instructions {font-size: 16px; line-height: 1.6; margin-bottom: 25px;}
+#number {
+    font-size: 72px; 
+    font-weight: 900;
+    color: #007bff; 
+    margin: 20px 0;
+    min-height: 80px; 
+    transition: transform 0.2s ease; /* For smooth visual feedback */
+}
+input {
+    font-family: monospace; /* Monospaced font for numbers */
+    font-size: 38px;
+    padding: 12px;
+    width: 200px;
+    max-width: 80%;
+    text-align: center;
+    border: 3px solid #ccc;
+    border-radius: 15px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    direction: ltr; /* Ensure numbers are read LTR */
+}
+input:focus {
+    border-color: #28a745; 
+    box-shadow: 0 0 10px rgba(40, 167, 69, 0.5);
+    outline: none;
+}
+#timer {font-size: 26px; color: #ff5722; margin-top: 15px; font-weight: bold;}
+#msg {
+    font-size: 24px;
+    font-weight: bold;
+    min-height: 35px;
+    margin-top: 15px;
+    color: #333;
+}
+#score {margin-top: 15px; font-size: 18px; color: #555; display: flex; justify-content: space-around; flex-wrap: wrap;}
+#score span {margin: 5px;}
+
+/* Level Screen Styling */
+#levelScreen {
+    display: none;
+    text-align: center;
+    padding: 20px 0;
+}
+#levelScreen h2 {
+    font-size: 36px;
+    color: #007bff;
+    margin-bottom: 15px;
+}
+#levelStartBtn {
+    background: #17a2b8; /* A cool color for starting a new phase */
+    color: white;
+    margin-top: 20px;
+}
+
+#endScreen {display: none; text-align: center; font-size: 18px;}
+#endScreen h2 {font-size: 28px; margin-bottom: 20px; color: #dc3545;}
+
+/* Custom Button Colors */
+#langButtons button {
+    background: #007bff;
+    color: white;
+}
+#startBtn {
+    background: #ffc107;
+    color: #333;
+}
+#restartBtn {background: #28a745; color: white;}
+    </style>
+</head>
+<body>
+
+<div id="gameContainer">
+    <!-- اختيار اللغة -->
+    <div id="langSelect">
+        <h3>اختر اللغة | Choose Language</h3>
+        <div id="langButtons">
+            <!-- FIX: Added onclick="" to force iOS Safari to recognize the touch target immediately -->
+            <button data-lang="ar" onclick="">🇦🇪 عربي</button>
+            <button data-lang="en" onclick="">🇬🇧 English</button>
+        </div>
+    </div>
+
+    <!-- تعليمات البداية -->
+    <div id="instructions" style="display:none;"></div>
+
+    <!-- منطقة اللعبة -->
+    <div id="gameArea" style="display:none;">
+        <div id="number">--</div><br>
+        <!-- Ensure LTR direction for number input -->
+        <input id="answer" placeholder="" autocomplete="off" dir="ltr"/>
+        <div id="timer">⏳ <span id="time">5 ثوانٍ</span> </div>
+        <div id="msg"></div>
+        <div id="score">
+            <span id="scorePoints"></span> | <span id="scoreLevel"></span> | <span id="scoreStreak"></span>
+        </div>
+    </div>
+    
+    <!-- شاشة المستوى الجديد (Level Splash Screen) -->
+    <div id="levelScreen" style="display:none;">
+        <h2 id="levelTitle"></h2>
+        <p id="levelMessage"></p>
+        <button id="levelStartBtn"></button>
+    </div>
+
+    <!-- شاشة النهاية -->
+    <div id="endScreen">
+        <h2 id="endTitle"></h2>
+        <p id="endPoints"></p>
+        <p id="endReasonText"></p>
+        <button id="restartBtn"></button>
+    </div>
+</div>
+
+<!-- أصوات (Sound Effects) -->
+<audio id="soundCorrect" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
+<audio id="soundWrong" src="https://actions.google.com/sounds/v1/cartoon/boing.ogg"></audio>
+<audio id="soundStart" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg"></audio>
+
+<script>
+let level, points, streak, current, previousNumber, timeLeft, timer, playing, language;
+
+// Initialize variables
+language = "ar"; 
+level = 1; // Starting at Level 1 (single-digit)
+points = 0; 
+streak = 0; 
+current = ""; 
+previousNumber = ""; 
+timeLeft = 5; 
+playing = false;
+
+const texts = {
+    ar:{
+        instructions:`🎮 طريقة اللعب
+سيظهر لك رقم (مثل 1, 2, 3.. أو 47). 
+يجب إدخال رقم جديد بإضافة 1 لكل خانة. 
+مثال: 47 تصبح 58 
+لديك 5 ثوانٍ للإجابة. 
+كل إجابة صحيحة = نقطة واحدة.`,
+        startBtn:"▶️ بدء",
+        time:"ثوانٍ",
+        correct:"✔️ إجابة صحيحة!",
+        newLevel:"🚀 مستوى جديد!",
+        levelReady: "هل أنت مستعد؟",
+        endTitle:"🎯 انتهت اللعبة!",
+        points:"النقاط النهائية",
+        reason:"سبب النهاية",
+        restart:"🔄 إعادة اللعب",
+        scorePoints:"النقاط",
+        scoreLevel:"المستوى",
+        scoreStreak:"السلسلة"
+    },
+    en:{
+        instructions:`🎮 How to Play
+A number  will be shown to you (e.g., 1, 2, 3.. or 47).
+you will enter a number by adding +1 to each digit.
+Example: 47 will be 58
+You have 5 seconds to answer.
+Each correct answer = 1 point.`,
+        startBtn:"▶️ Start",
+        time:"sec",
+        correct:"✔️ Correct!",
+        newLevel:"🚀 New Level!",
+        levelReady: "Are you ready?",
+        endTitle:"🎯 Game Over!",
+        points:"Points",
+        reason:"Reason",
+        restart:"🔄 Restart",
+        scorePoints:"Points",
+        scoreLevel:"Level",
+        scoreStreak:"Streak"
+    }
+};
+
+/**
+ * Normalizes input from the text field, converting Eastern Arabic numerals to Western numerals.
+ * @param {string} input - The raw input string.
+ * @returns {string} The normalized string using only Western numerals (0-9).
+ */
+function normalize(input){
+    const map = {"٠":"0","١":"1","٢":"2","٣":"3","٤":"4","٥":"5","٦":"6","٧":"7","٨":"8","٩":"9"};
+    return input.split("").map(ch => map[ch] ?? ch).join("");
+}
+
+// Show Instructions Screen
+function showInstructions(){
+    document.getElementById("instructions").style.display="block";
+    document.getElementById("instructions").innerHTML=`<p>${texts[language].instructions}</p>
+    <button id="startBtn">${texts[language].startBtn}</button>`;
+    
+    // Get the dynamically created start button
+    const startButton = document.getElementById("startBtn");
+    
+    const startHandler = (e) => {
+        // Prevent default only for touch events to avoid conflicts with synthetic clicks
+        if (e.type === 'touchend') {
+            e.preventDefault(); 
+        }
+        startGame();
+    };
+    
+    // Attach both click and touchend for robustness on the dynamically created button
+    startButton.addEventListener("click", startHandler);
+    startButton.addEventListener("touchend", startHandler);
+}
+
+// Start Game Initialization
+function startGame(){
+    level=1; points=0; streak=0; playing=true; 
+    document.getElementById("instructions").style.display="none";
+    document.getElementById("endScreen").style.display="none";
+    document.getElementById("gameArea").style.display="none"; 
+    
+    updateScore();
+    showLevelScreen(); // Start the game flow with the level screen
+}
+
+// Show Level Splash Screen
+function showLevelScreen() {
+    // Stop any running timer
+    clearInterval(timer); 
+
+    // Hide other screens
+    document.getElementById("gameArea").style.display = "none";
+    document.getElementById("endScreen").style.display = "none";
+    document.getElementById("instructions").style.display = "none";
+    
+    // Show level screen
+    const levelScreen = document.getElementById("levelScreen");
+    levelScreen.style.display = "block";
+    
+    // Set text
+    document.getElementById("levelTitle").innerText = `${texts[language].scoreLevel} ${level}`;
+    document.getElementById("levelMessage").innerText = texts[language].levelReady;
+    
+    const startBtn = document.getElementById("levelStartBtn");
+    startBtn.innerText = texts[language].startBtn; 
+    startBtn.onclick = () => {
+        levelScreen.style.display = "none"; // Hide level screen
+        document.getElementById("gameArea").style.display = "block"; // Show game area
+        document.getElementById("soundStart").play();
+        generateNumber(); // Start the actual level challenge
+    };
+}
+
+
+// Update Scoreboard Display
+function updateScore(){
+    document.getElementById("scorePoints").innerText = `${texts[language].scorePoints}: ${points}`;
+    document.getElementById("scoreLevel").innerText = `${texts[language].scoreLevel}: ${level}`;
+    document.getElementById("scoreStreak").innerText = `${texts[language].scoreStreak}: ${streak} / 5`;
+}
+
+// Generate New Number based on Current Level
+function generateNumber(){
+    if(!playing) return;
+    let num;
+    const maxAttempts = 10;
+    let attempts = 0;
+
+    do{
+        // Calculate min/max based on the level (Level 1: 1-9, Level 2: 10-99, etc.)
+        const min = 10**(level-1); 
+        const max = (10**level)-1;
+        num = Math.floor(min + Math.random()*(max-min+1)).toString();
+        attempts++;
+        // Ensure new number is different from the previous one, and doesn't contain '9'
+    }while( (num.includes("9") || num === previousNumber) && attempts < maxAttempts);
+
+    previousNumber = current; 
+    current = num;
+    
+    // Smooth visual feedback for the new number
+    const numberElement = document.getElementById("number");
+    numberElement.style.transform = 'scale(0.9)'; 
+    setTimeout(() => {
+        numberElement.innerText = current;
+        numberElement.style.transform = 'scale(1)'; 
+    }, 100); 
+
+    document.getElementById("answer").value="";
+    document.getElementById("msg").innerText="";
+    const inputField = document.getElementById("answer");
+    inputField.focus();
+    inputField.select();
+    startTimer();
+}
+
+// Timer Logic
+function startTimer(){
+    clearInterval(timer);
+    timeLeft=5;
+    // Display with language-specific unit (e.g., "5 sec" or "5 ثوانٍ")
+    document.getElementById("time").innerText=`${timeLeft} ${texts[language].time}`; 
+    timer=setInterval(()=>{
+        timeLeft--;
+        // Update display with unit
+        document.getElementById("time").innerText=`${timeLeft} ${texts[language].time}`; 
+        if(timeLeft<=0) endGame(`${texts[language].reason}: ${language==="ar"?"انتهى الوقت ⏰":"Time up ⏰"}`);
+    },1000);
+}
+
+// Automatic Answer Check on Input
+function checkAnswerAuto(){
+    if(!playing) return;
+    const raw = document.getElementById("answer").value.trim();
+    const ans = normalize(raw);
+    
+    // Only check if the length matches the required answer length
+    if(ans.length!==current.length) return;
+    
+    // Calculate the correct answer
+    const correct = current.split("").map(d=>+d+1).join("");
+    
+    if(ans===correct){
+        clearInterval(timer);
+        points++; streak++;
+        document.getElementById("msg").innerText = texts[language].correct;
+        document.getElementById("soundCorrect").play();
+        
+        updateScore(); 
+        
+        if(streak>=5){
+            level++; streak=0;
+            document.getElementById("msg").innerText = texts[language].newLevel;
+            // Delay, then show the level splash screen
+            setTimeout(showLevelScreen, 800); 
+        } else {
+            // Delay, then generate next number normally
+            setTimeout(generateNumber, 600);
+        }
+    }else{
+        document.getElementById("soundWrong").play();
+        endGame(`${texts[language].reason}: ${language==="ar"?"إجابة خاطئة ❌":"Wrong answer ❌"}`);
+    }
+}
+
+// End Game Screen Display
+function endGame(reason){
+    clearInterval(timer);
+    playing=false;
+    document.getElementById("gameArea").style.display="none";
+    document.getElementById("levelScreen").style.display="none"; 
+    document.getElementById("endScreen").style.display="block";
+    document.getElementById("endTitle").innerText = texts[language].endTitle;
+    document.getElementById("endPoints").innerText = `${texts[language].points}: ${points}`;
+    document.getElementById("endReasonText").innerText = reason;
+    const btn = document.getElementById("restartBtn");
+    btn.innerText = texts[language].restart;
+    btn.style.display="inline-block";
+    btn.onclick = showInstructions;
+}
+
+/**
+ * Initialization function to attach all event listeners after the DOM is fully loaded.
+ */
+function initGame() {
+    // Language Selection Handler
+    document.querySelectorAll("#langButtons button").forEach(btn=>{
+        // Using standard click handler, relying on the 'onclick=""' attribute in the HTML 
+        // to make the button a valid touch target for iOS.
+        btn.addEventListener("click", ()=>{
+            language = btn.dataset.lang;
+            // Adjust HTML reading direction based on language (though numbers remain LTR)
+            document.documentElement.setAttribute("dir", language === "ar" ? "rtl" : "ltr");
+            document.getElementById("langSelect").style.display="none";
+            showInstructions();
+        });
+    });
+
+    // Event Listener for input changes
+    document.getElementById("answer").addEventListener("input", checkAnswerAuto);
+}
+
+// Start the initialization process once the window resources are loaded
+window.onload = initGame;
+
+</script>
+</body>
+</html>
